@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuel Tally</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one phone-width column, totals pinned on top like a race clock, product list below. */
+:root {
+  --bg: #f2f4f1;
+  --surface: #ffffff;
+  --ink: #17211c;
+  --muted: #5d6b63;
+  --line: #d9dfda;
+  --accent: #1f6f4a;
+  --accent-ink: #ffffff;
+  --carb: #a85a05;
+  --sodium: #0e7490;
+  --fluid: #2b6cb0;
+  --font-display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101512; --surface: #19211c; --ink: #e8eee9; --muted: #9aa8a0; --line: #2b3731;
+    --accent: #5fcf98; --accent-ink: #0c1a13; --carb: #f0a64a; --sodium: #5cc8e0; --fluid: #7db4f0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101512; --surface: #19211c; --ink: #e8eee9; --muted: #9aa8a0; --line: #2b3731;
+  --accent: #5fcf98; --accent-ink: #0c1a13; --carb: #f0a64a; --sodium: #5cc8e0; --fluid: #7db4f0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.4; }
+main { max-width: 560px; margin: 0 auto; padding: 0 16px 40px; }
+h1, h2 { font-family: var(--font-display); font-weight: 700; text-wrap: balance; margin: 0; }
+h1 { font-size: 34px; letter-spacing: 0.01em; }
+h2 { font-size: 22px; margin: 28px 0 10px; }
+header { padding: 20px 0 12px; }
+.sub { margin: 2px 0 0; color: var(--muted); }
+
+.totals { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 8px 0 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tot { display: flex; flex-direction: column; border-left: 5px solid var(--c); padding-left: 10px; min-width: 0; }
+.tot.carb { --c: var(--carb); }
+.tot.sod { --c: var(--sodium); }
+.tot.flu { --c: var(--fluid); }
+.lbl { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.val { font-family: var(--font-display); font-weight: 700; font-size: 44px; line-height: 1; color: var(--c); font-variant-numeric: tabular-nums; }
+.val small { font-size: 18px; margin-left: 4px; color: var(--muted); font-weight: 600; }
+.timerow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); }
+.timerow input { width: 64px; }
+.rate { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); margin-left: auto; }
+
+input[type="text"], input[type="number"] {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 10px; min-width: 0;
+}
+input:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button {
+  font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); padding: 9px 14px;
+}
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+label { font-weight: 600; }
+
+.quick { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; }
+.msg { margin: 0; min-height: 1.4em; color: var(--muted); font-size: 14px; }
+.msg.warn { color: var(--carb); }
+
+ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; background: var(--surface);
+  border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.item.on { border-left-color: var(--accent); }
+.name { font-weight: 600; }
+.serv { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.note { color: var(--muted); font-size: 13px; font-style: italic; }
+.ctl { display: flex; align-items: center; gap: 4px; }
+.ctl button { width: 40px; height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+.u { color: var(--muted); font-size: 14px; margin-left: 2px; }
+.ctl input { width: 58px; text-align: center; padding: 9px 4px; font-variant-numeric: tabular-nums; }
+.line { grid-column: 1 / -1; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; min-height: 1.2em; }
+.line .c { color: var(--carb); }
+.line .s { color: var(--sodium); }
+.rm { font-size: 13px; padding: 2px 8px; margin-left: 8px; color: var(--muted); }
+
+details { margin-top: 18px; }
+summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.form .full { grid-column: 1 / -1; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.form input { width: 100%; }
+
+.actions { display: flex; gap: 8px; margin-top: 24px; flex-wrap: wrap; }
+pre { white-space: pre-wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-family: var(--font-body); font-size: 14px; }
+.foot { margin-top: 24px; color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: no-preference) { .item { transition: border-color .15s; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Fuel Tally</h1>
+    <p class="sub">Carbs, sodium and fluid for the run.</p>
+  </header>
+
+  <section class="totals" aria-label="Totals">
+    <div class="panel">
+      <div class="big" aria-live="polite">
+        <div class="tot carb"><span class="lbl">Carbs</span><span class="val"><span id="t-carb">0</span><small>g</small></span></div>
+        <div class="tot sod"><span class="lbl">Sodium</span><span class="val"><span id="t-sod">0</span><small>mg</small></span></div>
+        <div class="tot flu"><span class="lbl">Fluid</span><span class="val"><span id="t-flu">0</span><small>oz</small></span></div>
+      </div>
+      <div class="timerow">
+        <span>Run time</span>
+        <input id="hrs" type="number" inputmode="decimal" min="0" step="1" placeholder="h" aria-label="Run time hours">
+        <input id="mins" type="number" inputmode="decimal" min="0" max="59" step="5" placeholder="min" aria-label="Run time minutes">
+        <span class="rate" id="rate"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="quick">
+    <label for="quick">Type what you ate and drank</label>
+    <div class="row">
+      <input id="quick" type="text" autocomplete="off" placeholder="2 neversecond, 1 pf30, 300ml nuun">
+      <button id="add" class="primary" type="button">Add</button>
+    </div>
+    <p class="msg" id="msg">Numbers add to what is already logged. Nuun takes ml (300ml nuun); plain water counts as zero.</p>
+  </section>
+
+  <h2>Your products</h2>
+  <ul id="list"></ul>
+
+  <details id="custom">
+    <summary>Add your own item</summary>
+    <form class="form" id="cform">
+      <label class="full">Name<input id="c-name" type="text" required></label>
+      <label>Carbs per serving (g)<input id="c-carb" type="number" inputmode="decimal" min="0" step="any" required></label>
+      <label>Sodium per serving (mg)<input id="c-sod" type="number" inputmode="decimal" min="0" step="any" required></label>
+      <label class="full">Serving size (optional)<input id="c-serv" type="text" placeholder="1 gel (60 ml)"></label>
+      <div class="full"><button class="primary" type="submit">Save item</button></div>
+    </form>
+  </details>
+
+  <div class="actions">
+    <button id="copy" type="button">Copy summary</button>
+    <button id="clear" type="button">Clear run</button>
+  </div>
+  <pre id="copyfallback" hidden></pre>
+
+  <p class="foot">Values come from package labels and manufacturer listings. Flavors can differ by a gram or two, so check your wrapper if it matters. Your log and custom items stay in this browser only.</p>
+</main>
+
+<script>
+(function () {
+  var BASE = [
+    { id: "neversecond", name: "Neversecond C30 Energy Gel", serving: "1 gel (60 ml)", carbs: 30, sodium: 200, alias: ["neversecond", "never second", "c30"] },
+    { id: "pf30", name: "Precision Fuel PF 30 Gel", serving: "1 gel (51 g)", carbs: 30, sodium: 0, alias: ["precision", "pf30", "pf 30", "pf"] },
+    { id: "nuun", name: "Nuun Sport drink", per: 475, unit: "ml", step: 50, serving: "per 475 ml (1 tablet in 16 oz)", carbs: 4, sodium: 300, note: "Enter the ml you drank. Math scales from one tablet per 475 ml. Some older tubes list 360 mg sodium.", alias: ["nuun", "tablet"] },
+    { id: "hplus", name: "Huma Plus Chia Energy Gel", serving: "1 gel (44 g)", carbs: 24, sodium: 240, note: "Carbs 21-24 g and sodium 240-250 mg by flavor.", alias: ["huma plus", "plus"] },
+    { id: "huma", name: "Huma Chia Energy Gel", serving: "1 gel (43 g)", carbs: 24, sodium: 105, note: "Carbs 21-24 g by flavor.", alias: ["huma"] },
+    { id: "maurten", name: "Maurten Gel 100", serving: "1 gel (40 g)", carbs: 25, sodium: 20, note: "US label sodium. EU listings show 85 mg salt.", alias: ["maurten"] },
+    { id: "amacx", name: "Amacx Drink Gel", serving: "1 gel (60 ml)", carbs: 30, sodium: 200, alias: ["amacx"] },
+    { id: "chews", name: "Honey Stinger Energy Chews (Cherry Blossom)", serving: "6 chews (30 g)", carbs: 23, sodium: 40, note: "A 50 g bag is about 2 servings. 1 = six chews.", alias: ["chews", "chew", "cherry"] },
+    { id: "waffle", name: "Honey Stinger Energy Waffle (Salted Caramel)", serving: "1 waffle (30 g)", carbs: 19, sodium: 160, alias: ["waffle", "caramel"] }
+  ];
+  var ML_PER_OZ = 29.5735;
+  var KEY = "fuel-tally-v2";
+  var state = { qty: { neversecond: 1, pf30: 1, nuun: 300 }, custom: [], hrs: "", mins: "" };
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) { var s = JSON.parse(raw); if (s && s.qty) state = s; }
+    } catch (e) {}
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  function items() { return BASE.concat(state.custom); }
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function fmt(n) { return String(Math.round(n * 10) / 10); }
+  function k(it) { return it.per ? 1 / it.per : 1; }
+  function stepOf(id) { var f = items().filter(function (i) { return i.id === id; })[0]; return f && f.step ? f.step : 1; }
+  function qty(id) { var q = parseFloat(state.qty[id]); return isFinite(q) && q > 0 ? q : 0; }
+
+  function render() {
+    var html = items().map(function (it) {
+      var rm = it.custom ? '<button class="rm" type="button" data-act="rm" data-id="' + it.id + '" aria-label="Remove ' + esc(it.name) + '">Remove</button>' : "";
+      return '<li class="item" id="r-' + it.id + '" data-id="' + it.id + '">' +
+        '<div class="info"><div class="name">' + esc(it.name) + rm + '</div>' +
+        '<div class="serv">' + esc(it.serving) + ' &middot; ' + fmt(it.carbs) + ' g carbs &middot; ' + fmt(it.sodium) + ' mg sodium</div>' +
+        (it.note ? '<div class="note">' + esc(it.note) + '</div>' : "") + '</div>' +
+        '<div class="ctl">' +
+        '<button type="button" data-act="dec" data-id="' + it.id + '" aria-label="One less ' + esc(it.name) + '">&minus;</button>' +
+        '<input id="q-' + it.id + '" type="number" inputmode="decimal" min="0" step="' + (it.step || 0.5) + '" value="' + (qty(it.id) || "") + '" placeholder="0" aria-label="Amount of ' + esc(it.name) + (it.unit ? ' in ' + it.unit : '') + '" data-id="' + it.id + '">' +
+        (it.unit ? '<span class="u">' + it.unit + '</span>' : '') +
+        '<button type="button" data-act="inc" data-id="' + it.id + '" aria-label="One more ' + esc(it.name) + '">+</button>' +
+        '</div><div class="line" id="l-' + it.id + '"></div></li>';
+    }).join("");
+    $("list").innerHTML = html;
+    $("hrs").value = state.hrs;
+    $("mins").value = state.mins;
+    update();
+  }
+
+  function totals() {
+    var c = 0, s = 0, ml = 0;
+    items().forEach(function (it) {
+      var q = qty(it.id); c += q * it.carbs * k(it); s += q * it.sodium * k(it);
+      if (it.unit === "ml") ml += q;   // drinks are logged by volume, so that's the fluid
+    });
+    return { c: c, s: s, f: ml / ML_PER_OZ };
+  }
+
+  function update() {
+    items().forEach(function (it) {
+      var q = qty(it.id), row = $("r-" + it.id), line = $("l-" + it.id);
+      if (!row) return;
+      row.classList.toggle("on", q > 0);
+      line.innerHTML = q > 0 ? 'Adds <span class="c">' + fmt(q * it.carbs * k(it)) + ' g carbs</span> &middot; <span class="s">' + fmt(q * it.sodium * k(it)) + ' mg sodium</span>' : "";
+    });
+    var t = totals();
+    $("t-carb").textContent = fmt(t.c);
+    $("t-sod").textContent = fmt(t.s);
+    $("t-flu").textContent = fmt(t.f);
+    var h = (parseFloat(state.hrs) || 0) + (parseFloat(state.mins) || 0) / 60;
+    $("rate").textContent = h > 0 ? fmt(t.c / h) + " g/h · " + fmt(t.s / h) + " mg/h · " + fmt(t.f / h) + " oz/h" : "";
+    save();
+  }
+
+  function setQty(id, v) {
+    v = Math.max(0, v);
+    state.qty[id] = v;
+    var inp = $("q-" + id);
+    if (inp) inp.value = v || "";
+    update();
+  }
+
+  $("list").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-act]");
+    if (!b) return;
+    var id = b.getAttribute("data-id"), act = b.getAttribute("data-act");
+    if (act === "inc") setQty(id, qty(id) + stepOf(id));
+    else if (act === "dec") setQty(id, qty(id) - stepOf(id));
+    else if (act === "rm") {
+      state.custom = state.custom.filter(function (c) { return c.id !== id; });
+      delete state.qty[id];
+      render();
+    }
+  });
+  $("list").addEventListener("input", function (e) {
+    var id = e.target.getAttribute("data-id");
+    if (!id) return;
+    state.qty[id] = e.target.value;
+    update();
+  });
+  $("hrs").addEventListener("input", function (e) { state.hrs = e.target.value; update(); });
+  $("mins").addEventListener("input", function (e) { state.mins = e.target.value; update(); });
+
+  var WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, half: 0.5 };
+
+  function parse(text) {
+    var added = [], unknown = [];
+    var parts = text.split(/[,;\n]+|\s+and\s+|\s*\+\s*/i);
+    parts.forEach(function (raw) {
+      var p = raw.toLowerCase().trim();
+      if (!p) return;
+      var vol = 0, vm = p.match(/(\d+(?:\.\d+)?)\s*(ml|fl\s*oz|oz|liters?|l)\b/);
+      if (vm) { var vn = parseFloat(vm[1]), vu = vm[2]; vol = vu === "ml" ? vn : /oz/.test(vu) ? vn * 29.5735 : vn * 1000; }
+      p = p.replace(/\d+(?:\.\d+)?\s*(?:ml|oz|fl\s*oz|liters?|l)\b/g, " ").replace(/\s+/g, " ").trim();
+      if (/^(plain\s+)?water$/.test(p) || !p) return;
+      var n = 1, m;
+      if ((m = p.match(/(?:^|\s)x\s*(\d+(?:\.\d+)?)\b/)) || (m = p.match(/\b(\d+(?:\.\d+)?)\s*x(?:\s|$)/))) {
+        n = parseFloat(m[1]); p = p.replace(m[0], " ");
+      } else if ((m = p.match(/^(\d+(?:\.\d+)?)\b/))) {
+        n = parseFloat(m[1]); p = p.replace(m[0], " ");
+      } else if ((m = p.match(/^([a-z]+)\b/)) && WORDS.hasOwnProperty(m[1])) {
+        n = WORDS[m[1]]; p = p.replace(m[0], " ");
+      }
+      var hit = null;
+      items().forEach(function (it) {
+        if (hit) return;
+        var al = it.alias || [it.name.toLowerCase()];
+        al.forEach(function (a) { if (!hit && p.indexOf(a) !== -1) hit = it; });
+      });
+      if (hit && hit.per) { var ml = vol > 0 ? vol : n * hit.per; state.qty[hit.id] = qty(hit.id) + ml; added.push(fmt(ml) + " ml " + hit.name); }
+      else if (hit) { state.qty[hit.id] = qty(hit.id) + n; added.push(fmt(n) + " × " + hit.name); }
+      else unknown.push(raw.trim());
+    });
+    return { added: added, unknown: unknown };
+  }
+
+  function doAdd() {
+    var txt = $("quick").value;
+    if (!txt.trim()) { return; }
+    var r = parse(txt), msg = $("msg");
+    var out = r.added.length ? "Added " + r.added.join(", ") + "." : "";
+    if (r.unknown.length) out += (out ? " " : "") + "Not recognized: " + r.unknown.join(", ") + ". Use the list below or add your own item.";
+    msg.textContent = out || "Nothing to add.";
+    msg.className = "msg" + (r.unknown.length ? " warn" : "");
+    $("quick").value = "";
+    render();
+  }
+  $("add").addEventListener("click", doAdd);
+  $("quick").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+
+  $("cform").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = $("c-name").value.trim();
+    if (!name) return;
+    var id = "c" + Date.now();
+    state.custom.push({
+      id: id, name: name, custom: true,
+      serving: $("c-serv").value.trim() || "1 serving",
+      carbs: parseFloat($("c-carb").value) || 0,
+      sodium: parseFloat($("c-sod").value) || 0,
+      alias: [name.toLowerCase()]
+    });
+    state.qty[id] = 1;
+    $("cform").reset();
+    $("custom").open = false;
+    render();
+  });
+
+  function summary() {
+    var lines = items().filter(function (it) { return qty(it.id) > 0; }).map(function (it) {
+      return it.per ? fmt(qty(it.id)) + " ml " + it.name : fmt(qty(it.id)) + " × " + it.name;
+    });
+    var t = totals();
+    var s = "Run fuel: " + (lines.length ? lines.join("; ") : "nothing logged") + ". Total " + fmt(t.c) + " g carbs, " + fmt(t.s) + " mg sodium, " + fmt(t.f) + " oz fluid.";
+    var r = $("rate").textContent;
+    return r ? s + " Per hour: " + r + "." : s;
+  }
+  $("copy").addEventListener("click", function () {
+    var text = summary(), fb = $("copyfallback");
+    function fallback() { fb.textContent = text; fb.hidden = false; $("msg").textContent = "Copy was blocked here. The summary is below so you can select it."; }
+    try {
+      navigator.clipboard.writeText(text).then(function () { fb.hidden = true; $("msg").textContent = "Summary copied."; }, fallback);
+    } catch (e) { fallback(); }
+  });
+  $("clear").addEventListener("click", function () {
+    state.qty = {}; state.hrs = ""; state.mins = "";
+    $("msg").textContent = "Run cleared.";
+    render();
+  });
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
